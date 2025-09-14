@@ -1,98 +1,138 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useState } from "react";
+import {
+  Button,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+type Card = {
+  id: string;
+  name: string;
+  count: number;
+  image: string;
+};
 
-export default function HomeScreen() {
+export default function DecklistLookup() {
+  const [decklist, setDecklist] = useState("");
+  const [cards, setCards] = useState<Card[]>([]);
+
+  const parseDecklist = async () => {
+    const lines = decklist
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    const fetchedCards: Card[] = [];
+
+    for (let line of lines) {
+      const match = line.match(/^(\d+)\s+(.*)$/);
+      let count = 1;
+      let name = line;
+
+      if (match) {
+        count = parseInt(match[1], 10);
+        name = match[2];
+      }
+
+      try {
+        const res = await fetch(
+          `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(
+            name
+          )}`
+        );
+        const data = await res.json();
+
+        if (data.image_uris?.normal) {
+          fetchedCards.push({
+            id: data.id,
+            name,
+            count,
+            image: data.image_uris.normal,
+          });
+        } else if (data.card_faces) {
+          fetchedCards.push({
+            id: data.id,
+            name,
+            count,
+            image: data.card_faces[0].image_uris.normal,
+          });
+        }
+      } catch (err) {
+        console.error(`Error fetching card: ${name}`, err);
+      }
+    }
+
+    setCards(fetchedCards);
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  <View style={styles.container}>
+    <Text style={styles.title}>MTG Decklist Lookup</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Paste decklist here..."
+        value={decklist}
+        onChangeText={setDecklist}
+        multiline
+      />
+      <Button title="Import Deck" onPress={parseDecklist} />
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      <FlatList
+        data={cards}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
+        renderItem={({ item }) => (
+          <View style={styles.cardContainer}>
+            <Image source={{ uri: item.image }} style={styles.cardImage} />
+            {item.count > 1 && (
+              <View style={styles.countBadge}>
+                <Text style={styles.countText}>x{item.count}</Text>
+                </View>
+            )}
+            <Text style={styles.cardText}>
+              {item.count}x {item.name}
+            </Text>
+          </View>
+        )}
+      />
+    </View>        
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: { flexGrow: 1, padding: 10, marginTop: 40 },
+  title: { fontSize: 22, fontWeight: "bold", marginBottom: 10 },
+  input: {
+    borderColor: "#aaa",
+    borderWidth: 1,
+    padding: 8,
+    minHeight: 100,
+    marginBottom: 10,
+    textAlignVertical: "top",
+    color: "#000",
+    backgroundColor: "#fff",
+      },
+  cardContainer: { flex: 1, alignItems: "center", margin: 5 },
+  cardImage: { width: 160, height: 220, resizeMode: "contain" },
+  cardText: { fontSize: 14, textAlign: "center" },
+
+  countBadge: {
+    position: "absolute",
+    bottom: 5,
+    right: 10,
+    backgroundColor: "rgba(0.0.0.0.0.7)",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  countText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
+
 });
